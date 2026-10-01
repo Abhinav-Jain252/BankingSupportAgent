@@ -2,14 +2,11 @@ from langchain.messages import AIMessage
 from langgraph.graph import StateGraph,START,END
 from langgraph.checkpoint.memory import InMemorySaver
 
+from bankingsupportagent.agents.faq import faq_agent
 from bankingsupportagent.state import SupportState
 from bankingsupportagent.agents.router import router_node
 
 # Placeholder agents (we replace them in the later steps)
-
-def faq_agent(state: SupportState):
-    return {"messages":[AIMessage("[FAQ Agent] I will answer question about bank products and policies.")]}
-
 def account_agent(state:SupportState):
     return {"messages":[AIMessage("[Account Agent] I will look up your balance and transactions.")]}
 
@@ -44,7 +41,7 @@ def build_graph():
             "faq": "faq_agent",
             "account": "account_agent",
             "card": "card_agent",
-            "escalation": "escalation",
+            "escalate": "escalation",
         },
     )
 
