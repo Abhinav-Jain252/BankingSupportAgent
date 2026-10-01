@@ -2,6 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from langchain.messages import SystemMessage, HumanMessage
 from bankingsupportagent.config import get_llm
+from bankingsupportagent.state import SupportState
 
 
 class RouteDecision(BaseModel):
@@ -29,3 +30,9 @@ def route_query(query:str) -> RouteDecision:
     llm = get_llm()
     router = llm.with_structured_output(RouteDecision)
     return router.invoke([SystemMessage(ROUTER_PROMPT),HumanMessage(query)])
+
+
+def router_node(state: SupportState):
+    last_message = state["messages"][-1].content
+    decision = route_query(last_message)
+    return {"route": decision.route, "route_reason":decision.reason}
