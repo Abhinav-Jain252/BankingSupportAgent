@@ -6,3 +6,4 @@ class SupportState(TypedDict):
     messages: Annotated[list,add_messages]
     route: str
     route_reason: str
+    customer_id: str

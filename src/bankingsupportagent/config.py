@@ -22,6 +22,7 @@ DOCS_DIR = PROJECT_ROOT/"data"/"docs"
 CHROMA_DIR = PROJECT_ROOT/"data"/"chroma_db"
 COLLECTION_NAME = "bank_docs"
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DB_PATH = PROJECT_ROOT/"data"/"bank.db"
 
 def get_embeddings():
     """Return the embedding model used for both indexing and searching"""
