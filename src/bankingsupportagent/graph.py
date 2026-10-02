@@ -1,14 +1,15 @@
 from langchain.messages import AIMessage
 from langgraph.graph import StateGraph,START,END
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from bankingsupportagent.agents.faq import faq_agent
 from bankingsupportagent.state import SupportState
 from bankingsupportagent.agents.router import router_node
+from bankingsupportagent.agents.account import account_agent
+from bankingsupportagent.tools.account_tools import ACCOUNT_TOOLS
 
 # Placeholder agents (we replace them in the later steps)
-def account_agent(state:SupportState):
-    return {"messages":[AIMessage("[Account Agent] I will look up your balance and transactions.")]}
 
 def card_agent(state:SupportState):
     return {"messages":[AIMessage("[Card Agent] I will help with blocking card and disputes.")]}
@@ -29,6 +30,7 @@ def build_graph():
     builder.add_node("router",router_node)
     builder.add_node("faq_agent",faq_agent)
     builder.add_node("account_agent",account_agent)
+    builder.add_node("account_tools", ToolNode(ACCOUNT_TOOLS))
     builder.add_node("card_agent",card_agent)
     builder.add_node("escalation",escalation)
 
@@ -45,7 +47,14 @@ def build_graph():
         },
     )
 
-    for node in ["faq_agent","account_agent","card_agent","escalation"]:
+    builder.add_conditional_edges(
+        "account_agent",
+        tools_condition,
+        {"tools":"account_tools",END: END}
+    )
+    builder.add_edge("account_tools","account_agent")
+
+    for node in ["faq_agent","card_agent","escalation"]:
         builder.add_edge(node,END)
 
     return builder.compile(checkpointer=InMemorySaver())
