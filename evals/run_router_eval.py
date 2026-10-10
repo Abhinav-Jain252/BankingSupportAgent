@@ -1,3 +1,4 @@
+import sys
 import json
 import time
 from collections import defaultdict
@@ -23,11 +24,14 @@ def call_with_retry(fn, *args, retries=3):
 
 
 def main():
+    use_history = "--no-history" not in sys.argv
     results = []
 
     for number, case in enumerate(ROUTER_CASES, start=1):
+        history = case.get("history", "") if use_history else ""
+
         start = time.perf_counter()
-        decision = call_with_retry(route_query, case["query"], case.get("history", ""))
+        decision = call_with_retry(route_query, case["query"], history)
         seconds = time.perf_counter() - start
 
         correct = decision.route in case["expected"]
@@ -54,7 +58,8 @@ def main():
 
     average_seconds = sum(r["seconds"] for r in results) / total
 
-    print(f"\nRouting accuracy: {passed}/{total} = {passed / total:.0%}")
+    print(f"\nHistory: {'ON' if use_history else 'OFF'}")
+    print(f"Routing accuracy: {passed}/{total} = {passed / total:.0%}")
     for route, (ok, count) in sorted(by_route.items()):
         print(f"  {route:<9} {ok}/{count}")
     print(f"Average router latency: {average_seconds:.2f}s")
@@ -66,8 +71,10 @@ def main():
             print(f"  - '{r['query']}'\n    expected {r['expected']}, got '{r['predicted']}': {r['reason']}")
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    output = RESULTS_DIR / "router_results.json"
+    file_name = "router_results.json" if use_history else "router_results_no_history.json"
+    output = RESULTS_DIR / file_name
     output.write_text(json.dumps({
+        "history": use_history,
         "accuracy": round(passed / total, 3),
         "passed": passed,
         "total": total,
