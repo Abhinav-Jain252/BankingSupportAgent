@@ -10,6 +10,7 @@ from bankingsupportagent.tools.account_tools import ACCOUNT_TOOLS
 from bankingsupportagent.agents.cards import card_agent
 from bankingsupportagent.tools.card_tools import CARD_TOOLS
 from bankingsupportagent.agents.escalation import escalation
+from bankingsupportagent.guardrails import guardrail_node
 
 
 # Decides which node runs after the router
@@ -28,9 +29,11 @@ def build_graph():
     builder.add_node("card_agent",card_agent)
     builder.add_node("card_tools",ToolNode(CARD_TOOLS))
     builder.add_node("escalation",escalation)
+    builder.add_node("guardrail", guardrail_node)
 
     #Edges
-    builder.add_edge(START,"router")
+    builder.add_edge(START, "guardrail")
+    builder.add_edge("guardrail", "router")
     builder.add_conditional_edges(
         "router",
         pick_agent,
@@ -55,6 +58,7 @@ def build_graph():
         {"tools": "card_tools",END:END}
     )
     builder.add_edge("card_tools","card_agent")
+    
 
     for node in ["faq_agent","escalation"]:
         builder.add_edge(node,END)
