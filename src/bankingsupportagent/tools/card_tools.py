@@ -183,7 +183,11 @@ def block_card(runtime:ToolRuntime, last4:str) -> str:
     })
 
     if not decision.get("approved"):
-        return f"The customer cancelled. The card ending {last4} was not blocked."
+        return (
+            f"The customer declined. The card ending {last4} was NOT blocked. "
+            "Do not try to block it again unless the customer asks again. "
+            "Offer to freeze the card instead."
+        )
     return block_card_in_db(customer_id,last4)
 
 
