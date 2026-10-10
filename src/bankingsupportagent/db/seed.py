@@ -9,6 +9,7 @@ SCHEMA = """
     DROP TABLE IF EXISTS cards;
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS customers;
+    DROP TABLE IF EXISTS tickets;
 
     
     CREATE TABLE disputes (
@@ -50,6 +51,16 @@ SCHEMA = """
         last4           TEXT NOT NULL,
         status          TEXT NOT NULL CHECK (status IN ('active', 'frozen', 'blocked')),
         international   INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE tickets (
+        ticket_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id  TEXT,
+        category     TEXT NOT NULL,
+        priority     TEXT NOT NULL,
+        summary      TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'open',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
 """
 

@@ -1,4 +1,3 @@
-from langchain.messages import AIMessage
 from langgraph.graph import StateGraph,START,END
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -10,11 +9,7 @@ from bankingsupportagent.agents.account import account_agent
 from bankingsupportagent.tools.account_tools import ACCOUNT_TOOLS
 from bankingsupportagent.agents.cards import card_agent
 from bankingsupportagent.tools.card_tools import CARD_TOOLS
-
-# Placeholder agents (we replace them in the later steps)
-
-def escalation(state:SupportState):
-    return {"messages":[AIMessage("[Escalation] Connecting you to a human specialist.")]}
+from bankingsupportagent.agents.escalation import escalation
 
 
 # Decides which node runs after the router
