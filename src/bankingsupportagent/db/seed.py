@@ -3,11 +3,22 @@ import sqlite3
 from bankingsupportagent.config import DB_PATH
 
 SCHEMA = """
+
+    DROP TABLE IF EXISTS disputes;
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS cards;
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS customers;
 
+    
+    CREATE TABLE disputes (
+        dispute_id   TEXT PRIMARY KEY,
+        txn_id       INTEGER NOT NULL UNIQUE REFERENCES transactions(txn_id),
+        customer_id  TEXT NOT NULL REFERENCES customers(customer_id),
+        reason       TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'open',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 
     CREATE TABLE customers (
         customer_id TEXT PRIMARY_KEY,
