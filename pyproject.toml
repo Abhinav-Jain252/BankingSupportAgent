@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.143.0",
     "ipykernel>=7.4.0",
     "langchain>=1.4.3",
     "langchain-chroma>=1.1.0",
@@ -18,8 +19,10 @@ dependencies = [
     "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.12",
     "pypdf>=6.19.0",
+    "pytest>=9.1.1",
     "python-dotenv>=1.2.3",
     "sentence-transformers>=6.1.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]

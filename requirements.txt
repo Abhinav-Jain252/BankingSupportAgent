@@ -12,3 +12,6 @@ langchain-huggingface
 sentence-transformers
 
 pytest
+
+fastapi
+uvicorn

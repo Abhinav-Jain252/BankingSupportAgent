@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SecureBank Support</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --panel: #ffffff;
+      --text: #1c2430;
+      --muted: #667085;
+      --brand: #0b4f8a;
+      --brand-soft: #e7f0f8;
+      --line: #e3e7ee;
+      --warn: #fff6e5;
+      --warn-line: #f0c36d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+    .app {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 17px; margin: 0; color: var(--brand); flex: 1; }
+    header label { font-size: 13px; color: var(--muted); }
+    select, button { font: inherit; font-size: 14px; }
+    select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+    .secondary {
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+      background: #fff; cursor: pointer;
+    }
+    #messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 82%; padding: 10px 13px; border-radius: 12px; line-height: 1.45; white-space: pre-wrap; font-size: 15px; }
+    .user { align-self: flex-end; background: var(--brand); color: #fff; border-bottom-right-radius: 4px; }
+    .bot { align-self: flex-start; background: var(--brand-soft); border-bottom-left-radius: 4px; }
+    .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .confirm { align-self: flex-start; background: var(--warn); border: 1px solid var(--warn-line); }
+    .confirm .actions { margin-top: 10px; display: flex; gap: 8px; }
+    .confirm button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--warn-line); cursor: pointer; background: #fff; }
+    .confirm button.yes { background: #b42318; color: #fff; border-color: #b42318; }
+    .error { align-self: center; color: #b42318; font-size: 13px; }
+    .hint { color: var(--muted); font-size: 13px; text-align: center; margin-top: 30px; }
+    form { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--line); }
+    form input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+    form button { padding: 10px 18px; border: none; border-radius: 8px; background: var(--brand); color: #fff; cursor: pointer; }
+    form button:disabled { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>SecureBank Support</h1>
+      <label for="customer">Logged in as</label>
+      <select id="customer">
+        <option value="C1001">Rahul Sharma (C1001)</option>
+        <option value="C1002">Priya Iyer (C1002)</option>
+        <option value="">Not logged in</option>
+      </select>
+      <button class="secondary" id="new-chat" type="button">New chat</button>
+    </header>
+
+    <div id="messages"></div>
+
+    <form id="chat-form">
+      <input id="input" autocomplete="off" placeholder="Ask about your account, cards or bank policies..." maxlength="2000">
+      <button id="send" type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById("messages");
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("input");
+    const sendButton = document.getElementById("send");
+    const customerSelect = document.getElementById("customer");
+
+    let threadId = crypto.randomUUID();
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function formatReply(text) {
+      return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+
+    function addMessage(text, who, route) {
+      const div = document.createElement("div");
+      div.className = `msg ${who}`;
+      div.innerHTML = who === "user" ? escapeHtml(text) : formatReply(text);
+      if (route) {
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = `handled by: ${route} agent`;
+        div.appendChild(meta);
+      }
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function addConfirmation(question) {
+      const div = addMessage(question, "confirm");
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.innerHTML = '<button class="yes" type="button">Yes, continue</button><button type="button">No</button>';
+      div.appendChild(actions);
+      const [yes, no] = actions.querySelectorAll("button");
+      yes.onclick = () => answerConfirmation(true, actions);
+      no.onclick = () => answerConfirmation(false, actions);
+      setBusy(true, true);
+    }
+
+    function setBusy(busy, waitingForConfirmation = false) {
+      sendButton.disabled = busy;
+      input.disabled = busy;
+      input.placeholder = waitingForConfirmation
+        ? "Please answer the question above first"
+        : "Ask about your account, cards or bank policies...";
+    }
+
+    async function post(path, body) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Something went wrong");
+      return data;
+    }
+
+    function showResult(data) {
+      if (data.status === "needs_confirmation") {
+        addConfirmation(data.reply);
+      } else {
+        addMessage(data.reply, "bot", data.route);
+        setBusy(false);
+        input.focus();
+      }
+    }
+
+    function showError(error) {
+      const div = document.createElement("div");
+      div.className = "error";
+      div.textContent = error.message;
+      messagesEl.appendChild(div);
+      setBusy(false);
+    }
+
+    async function answerConfirmation(approved, actionsEl) {
+      actionsEl.remove();
+      addMessage(approved ? "Yes, continue" : "No", "user");
+      try {
+        showResult(await post("/confirm", { thread_id: threadId, approved }));
+      } catch (error) {
+        showError(error);
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      addMessage(text, "user");
+      setBusy(true);
+      const thinking = addMessage("Thinking...", "bot");
+      try {
+        const data = await post("/chat", {
+          thread_id: threadId,
+          message: text,
+          customer_id: customerSelect.value || null,
+        });
+        thinking.remove();
+        showResult(data);
+      } catch (error) {
+        thinking.remove();
+        showError(error);
+      }
+    });
+
+    function newChat() {
+      threadId = crypto.randomUUID();
+      messagesEl.innerHTML = '<p class="hint">Try: "What is the FD rate for senior citizens?", "Show my last 3 transactions", or "Freeze my card ending 4821".</p>';
+      setBusy(false);
+      input.focus();
+    }
+
+    document.getElementById("new-chat").onclick = newChat;
+    customerSelect.onchange = newChat;   // a different customer must never continue someone else's chat
+    newChat();
+  </script>
+</body>
+</html>
