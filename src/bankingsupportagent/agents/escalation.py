@@ -1,3 +1,4 @@
+from groq import BadRequestError
 from contextlib import closing
 from typing import Literal
 
@@ -73,7 +74,14 @@ def escalation(state:SupportState):
     # 1. LLM understand the conversation and fill in the ticket (structured output)
     conversation = format_history(state["messages"][-7:])
     llm = get_llm().with_structured_output(EscalationTicket)
-    ticket = llm.invoke([SystemMessage(ESCALATION_PROMPT), HumanMessage(conversation)])
+    try:
+        ticket = llm.invoke([SystemMessage(ESCALATION_PROMPT), HumanMessage(conversation)])
+    except BadRequestError:
+        # The model could not fill in the ticket. Still create one, so nothing is lost.
+        ticket = EscalationTicket(
+            category="human_request",
+            summary="Automatic summary failed. Specialist should read the conversation.",
+        )
 
 
     # 2. Code: priority, ticket number and reply
