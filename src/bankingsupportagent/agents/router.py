@@ -70,8 +70,8 @@ def router_node(state: SupportState):
         }
 
 
-def router_node(state: SupportState):
-    messages = state["messages"]
-    history = format_history(messages[-(HISTORY_MESSAGES + 1):-1])
-    decision = route_query(messages[-1].content, history)
-    return {"route": decision.route, "route_reason": decision.reason}
+# def router_node(state: SupportState):
+#     messages = state["messages"]
+#     history = format_history(messages[-(HISTORY_MESSAGES + 1):-1])
+#     decision = route_query(messages[-1].content, history)
+#     return {"route": decision.route, "route_reason": decision.reason}
