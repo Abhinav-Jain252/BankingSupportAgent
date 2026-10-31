@@ -1,7 +1,9 @@
+import logging
 from contextlib import asynccontextmanager, closing
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+import groq
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from langchain.messages import HumanMessage
 from pydantic import BaseModel, Field
@@ -25,6 +27,45 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan
 )
+
+
+# Error handling
+logger = logging.getLogger("securebank.api")
+
+def error_response(status_code:int, detail:str, headers:dict|None=None) -> JSONResponse:
+    """Same shape as FastAPI's own errors"""
+    return JSONResponse(status_code=status_code, content={"detail":detail},headers=headers)
+
+
+@app.exception_handler(groq.APITimeoutError)
+async def llm_timeout(request: Request, exc: groq.APITimeoutError):
+    logger.warning("LLM timed out on %s", request.url.path)
+    return error_response(504, "The assistant took too long to answer. Please try again.")
+
+
+@app.exception_handler(groq.RateLimitError)
+async def llm_rate_limited(request: Request, exc: groq.RateLimitError):
+    logger.warning("LLM rate limit hit on %s", request.url.path)
+    return error_response(503, "The assistant is busy right now. Please try again shortly.",
+                          headers={"Retry-After": "30"})
+
+
+@app.exception_handler(groq.APIConnectionError)
+async def llm_unreachable(request: Request, exc: groq.APIConnectionError):
+    logger.error("Could not reach the LLM on %s", request.url.path)
+    return error_response(502, "The assistant is temporarily unavailable. Please try again.")
+
+
+@app.exception_handler(groq.APIStatusError)
+async def llm_bad_response(request: Request, exc: groq.APIStatusError):
+    logger.error("LLM returned HTTP %s on %s", exc.status_code, request.url.path)
+    return error_response(502, "The assistant is temporarily unavailable. Please try again.")
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception):
+    logger.exception("Unexpected error on %s", request.url.path)
+    return error_response(500, "Something went wrong on our side. Please try again.")
 
 
 # Request Model
