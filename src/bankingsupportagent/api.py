@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from langchain.messages import HumanMessage
 from pydantic import BaseModel, Field
+from langgraph.types import Command
 
 from bankingsupportagent.graph import build_graph
 from bankingsupportagent.tools.account_tools import get_connection
@@ -39,6 +40,10 @@ class ChatResponse(BaseModel):
     reply: str
     route: str | None = None
 
+
+class ApproveRequest(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=100, description="The conversation that is waiting")
+    approved: bool = Field(description="true = go ahead, false = cancel")
 
 # Helpers
 def config_for(thread_id: str) -> dict:
@@ -103,4 +108,15 @@ def chat(body: ChatRequest):
         graph_input["customer_id"] = body.customer_id
 
     result = graph.invoke(graph_input, config=config_for(body.thread_id))
+    return to_response(result)
+
+
+@app.post("/approve",response_model=ChatResponse)
+def approve(body: ApproveRequest):
+    graph = app.state.graph
+
+    if not is_waiting_for_confirmation(graph, body.thread_id):
+        raise HTTPException(status_code=409, detail="There is nothing to approve in this conversation.")
+
+    result = graph.invoke(Command(resume={"approved": body.approved}), config=config_for(body.thread_id))
     return to_response(result)
