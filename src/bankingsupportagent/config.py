@@ -8,12 +8,14 @@ from langchain_huggingface import HuggingFaceEmbeddings
 load_dotenv()
 
 MODEL_NAME = os.getenv("GROQ_MODEL","groq:openai")
+LLM_TIMEOUT_SECONDS = 15        # Give up on groq after this long
+LLM_MAX_RETRIES = 1             # retry once on timeout, 429 and 5xx errors
 
 def get_llm(temperature: float = 0):
     """Return the chat model used by every agent in the project"""
     if not os.getenv("GROQ_API_KEY"):
         raise ValueError("GROQ_API_KEY not found. Add it to your .env file...")
-    return init_chat_model(MODEL_NAME,temperature=temperature)
+    return init_chat_model(MODEL_NAME,temperature=temperature,timeout=LLM_TIMEOUT_SECONDS,max_retries=LLM_MAX_RETRIES,)
 
 
 # RAG
