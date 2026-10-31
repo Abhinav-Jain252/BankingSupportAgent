@@ -1,96 +1,106 @@
-from pathlib import Path
+from contextlib import asynccontextmanager, closing
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel,Field
-from langgraph.types import Command
+from fastapi.responses import JSONResponse
+from langchain.messages import HumanMessage
+from pydantic import BaseModel, Field
 
 from bankingsupportagent.graph import build_graph
+from bankingsupportagent.tools.account_tools import get_connection
 
-STATIC_DIR = Path(__file__).parent/"static"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once, when the server starts
+    app.state.graph = build_graph()
+    yield
+    # Runs once, when the server stops (nothing to clean up yet)
+
 
 app = FastAPI(
-    title = "SecureBank Support Agent",
-    description="Multi-agent banking support assistant built with Langgraph",
-    version="1.0.0",
+    title="SecureBank Support API",
+    description="Multi-support banking support assistant built with langgraph",
+    version="2.0.0",
+    lifespan=lifespan
 )
-graph = build_graph()
 
 
-# Request and response shapes
-
+# Request Model
 class ChatRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=100, description="One ID per conversation")
-    message: str = Field(min_length=1,max_length=2000,description="The customer's message")
-    customer_id: str | None = Field(
-        default=None,
-        description="Logged in customer. DEMO ONLY: a real app takes this from the login token, never from the request body"
-    )
+    message: str = Field(min_length=1,max_length=100, description="The customer's message")
+    customer_id: str | None = Field(default=None, description="TEMP, this comes from login token instead")
 
 
-class ConfirmRequest(BaseModel):
-    thread_id: str = Field(min_length=1, max_length=100)
-    approved: bool
-
-
+# Response Model
 class ChatResponse(BaseModel):
     status: Literal["ok","needs_confirmation"]
     reply: str
     route: str | None = None
 
 
-
 # Helpers
 def config_for(thread_id: str) -> dict:
+    """Langgraph config: which saved conversation to load"""
     return {"configurable": {"thread_id": thread_id}}
 
 
-def to_response(result:dict) -> ChatResponse:
-    """Turn the graphs final state into what the app need to show"""
-    if "__interrupt__" in result:
-        question = result["__interrupt__"][0].value["message"]
-        return ChatResponse(status="needs_confirmation",reply=question, route=result.get("route"))
-    return ChatResponse(status="ok",reply=result["messages"][-1].content, route = result.get("route"))
-
-
-def run_graph(graph_input, thread_id:str) -> ChatResponse:
-    try:
-        result = graph.invoke(graph_input,config=config_for(thread_id))
-    except Exception:
-        # Never show internal errors to the users
-        raise HTTPException(status_code=503, detail="The assistant is temporarily unavailable. Please try again.")
-    return to_response(result)
-
-
-def is_waiting_for_confirmation(thread_id:str) -> bool:
+def is_waiting_for_confirmation(graph, thread_id:str) -> bool:
+    """True if this conversation is paused at an interrupt"""
     return bool(graph.get_state(config_for(thread_id)).next)
 
 
+def to_response(result:dict) -> ChatResponse:
+    """Turn the graphs final state to what the app shows"""
+    if "__interrupt__" in result:
+        question = result["__interrupt__"][0].value["message"]
+        return ChatResponse(status="needs_confirmation",reply=question, route=result.get("route"))
+    return ChatResponse(status="ok",reply=result["messages"][-1].content, route=result.get("route"))
 
-# Endpoints
+
+
+def database_ok() -> bool:
+    """True if the bank database exists and has been seeded"""
+    try:
+        with closing(get_connection()) as conn:
+            conn.execute("Select 1 FROM customers LIMIT 1")
+        return True
+    except Exception:
+        return False
+
+
 @app.get("/health")
 def health():
+    """Liveness: the server process is running and can answer"""
     return {"status":"ok"}
 
 
+@app.get("/ready")
+def ready():
+    """Readiness: Everything a chat request needs is available."""
+    checks = {
+        "graph": hasattr(app.state,"graph"),
+        "database": database_ok(),
+    }
+    if all(checks.values()):
+        return {"status":"ready","checks":checks}
+    return JSONResponse(status_code=503,content={"status":"not_ready","checks":checks})
+
+
+
 @app.post("/chat",response_model=ChatResponse)
-def chat(request: ChatRequest):
-    if is_waiting_for_confirmation(request.thread_id):
+def chat(body: ChatRequest):
+    graph = app.state.graph
+
+
+    if is_waiting_for_confirmation(graph, body.thread_id):
         raise HTTPException(status_code=409, detail="Please answer the pending confirmation first.")
-    graph_input = {"messages": request.message}
-    if request.customer_id:
-        graph_input["customer_id"] = request.customer_id
-    return run_graph(graph_input, request.thread_id)
 
+    # Build the graph input and run it
+    graph_input = {"messages": [HumanMessage(body.message)]}
+    if body.customer_id:
+        graph_input["customer_id"] = body.customer_id
 
-@app.post("/confirm", response_model=ChatResponse)
-def confirm(request: ConfirmRequest):
-    if not is_waiting_for_confirmation(request.thread_id):
-        raise HTTPException(status_code=409, detail="There is nothing to confirm in this conversation.")
-    return run_graph(Command(resume={"approved": request.approved}), request.thread_id)
-
-
-@app.get("/")
-def chat_page():
-    return FileResponse(STATIC_DIR / "index.html")
+    result = graph.invoke(graph_input, config=config_for(body.thread_id))
+    return to_response(result)
