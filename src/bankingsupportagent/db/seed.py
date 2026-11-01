@@ -1,6 +1,7 @@
 import sqlite3
 
 from bankingsupportagent.config import DB_PATH
+from bankingsupportagent.auth import hash_password
 
 SCHEMA = """
 
@@ -10,6 +11,7 @@ SCHEMA = """
     DROP TABLE IF EXISTS accounts;
     DROP TABLE IF EXISTS customers;
     DROP TABLE IF EXISTS tickets;
+    DROP TABLE IF EXISTS credentials;
 
     
     CREATE TABLE disputes (
@@ -22,7 +24,7 @@ SCHEMA = """
     );
 
     CREATE TABLE customers (
-        customer_id TEXT PRIMARY_KEY,
+        customer_id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         phone TEXT NOT NULL,
         email TEXT NOT NULL
@@ -62,6 +64,10 @@ SCHEMA = """
         status       TEXT NOT NULL DEFAULT 'open',
         created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE credentials (
+        customer_id    TEXT PRIMARY KEY REFERENCES customers(customer_id),
+        password_hash  TEXT NOT NULL
+    );
 """
 
 
@@ -96,6 +102,11 @@ CARDS = [
     ("CARD-3", "C1002", "Secure Rewards Credit", "3392", "active", 0),
 ]
 
+DEMO_PASSWORDS = {
+    "C1001": "rahul-demo-123",
+    "C1002": "priya-demo-123",
+}
+
 
 def seed():
     """Create a fresh mock database with sample customers and data"""
@@ -110,6 +121,10 @@ def seed():
             TRANSACTIONS,
         )
         conn.executemany("INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?)", CARDS)
+        conn.executemany(
+            "INSERT INTO credentials (customer_id, password_hash) VALUES (?, ?)",
+            [(cid, hash_password(pw)) for cid, pw in DEMO_PASSWORDS.items()],
+        )
 
     print(f"Seeded {len(CUSTOMERS)} customers, {len(TRANSACTIONS)} transactions, {len(CARDS)} cards into {DB_PATH}")
 

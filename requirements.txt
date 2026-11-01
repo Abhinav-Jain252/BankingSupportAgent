@@ -15,3 +15,6 @@ pytest
 
 fastapi
 uvicorn
+
+pyjwt[crypto]
+bcrypt

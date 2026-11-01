@@ -29,3 +29,11 @@ DB_PATH = PROJECT_ROOT/"data"/"bank.db"
 def get_embeddings():
     """Return the embedding model used for both indexing and searching"""
     return HuggingFaceEmbeddings(model_name = EMBEDDING_MODEL)
+
+
+# Login credentials (JWT, RS256)
+KEYS_DIR = PROJECT_ROOT / "keys"
+JWT_PRIVATE_KEY_PATH = KEYS_DIR / "private.pem"
+JWT_PUBLIC_KEY_PATH = KEYS_DIR / "public.pem"
+JWT_ALGORITHM = "RS256"
+ACCESS_TOKEN_MINUTES = 30

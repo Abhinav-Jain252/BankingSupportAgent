@@ -174,7 +174,7 @@
       actionsEl.remove();
       addMessage(approved ? "Yes, continue" : "No", "user");
       try {
-        showResult(await post("/confirm", { thread_id: threadId, approved }));
+        showResult(await post("/approve", { thread_id: threadId, approved }));
       } catch (error) {
         showError(error);
       }

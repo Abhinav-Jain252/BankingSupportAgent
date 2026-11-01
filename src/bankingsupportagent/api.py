@@ -1,22 +1,34 @@
 import logging
 from contextlib import asynccontextmanager, closing
+from pathlib import Path
 from typing import Literal
 
 import groq
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from langchain.messages import HumanMessage
 from pydantic import BaseModel, Field
 from langgraph.types import Command
 
 from bankingsupportagent.graph import build_graph
 from bankingsupportagent.tools.account_tools import get_connection
+from bankingsupportagent.rag.retriever import get_vector_store
+
+from bankingsupportagent.auth import authenticate, create_access_token, private_key, public_key
+from bankingsupportagent.config import ACCESS_TOKEN_MINUTES
+
+
+logger = logging.getLogger("securebank.api")
+STATIC_DIR = Path(__file__).parent/"static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs once, when the server starts
     app.state.graph = build_graph()
+    get_vector_store()
+    private_key()
+    public_key()
     yield
     # Runs once, when the server stops (nothing to clean up yet)
 
@@ -29,8 +41,6 @@ app = FastAPI(
 )
 
 
-# Error handling
-logger = logging.getLogger("securebank.api")
 
 def error_response(status_code:int, detail:str, headers:dict|None=None) -> JSONResponse:
     """Same shape as FastAPI's own errors"""
@@ -69,6 +79,17 @@ async def unexpected_error(request: Request, exc: Exception):
 
 
 # Request Model
+
+class LoginRequest(BaseModel):
+    customer_id: str = Field(min_length=1,max_length=20)
+    password: str = Field(min_length=1,max_length=64)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int = Field(description="Seconds until the token expires")
+
 class ChatRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=100, description="One ID per conversation")
     message: str = Field(min_length=1,max_length=100, description="The customer's message")
@@ -92,9 +113,9 @@ def config_for(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
-def is_waiting_for_confirmation(graph, thread_id:str) -> bool:
-    """True if this conversation is paused at an interrupt"""
-    return bool(graph.get_state(config_for(thread_id)).next)
+def is_waiting_for_confirmation(graph, thread_id: str) -> bool:
+    """True if this conversation is paused at an interrupt()."""
+    return bool(graph.get_state(config_for(thread_id)).interrupts)
 
 
 def to_response(result:dict) -> ChatResponse:
@@ -134,6 +155,16 @@ def ready():
     return JSONResponse(status_code=503,content={"status":"not_ready","checks":checks})
 
 
+@app.post("/login",response_model=TokenResponse)
+def login(body: LoginRequest):
+    if not authenticate(body.customer_id,body.password):
+        # Same message for "no such customer" and "wrong password": don't reveal which IDs exist
+        raise HTTPException(status_code=401, detail="Incorrect customer ID or password.")
+    return TokenResponse(
+        access_token=create_access_token(body.customer_id),
+        expires_in=ACCESS_TOKEN_MINUTES*60,
+    )
+
 
 @app.post("/chat",response_model=ChatResponse)
 def chat(body: ChatRequest):
@@ -161,3 +192,9 @@ def approve(body: ApproveRequest):
 
     result = graph.invoke(Command(resume={"approved": body.approved}), config=config_for(body.thread_id))
     return to_response(result)
+
+
+@app.get("/",include_in_schema=False)
+def chat_page():
+    """Serve the chat web page"""
+    return FileResponse(STATIC_DIR/"index.html")
