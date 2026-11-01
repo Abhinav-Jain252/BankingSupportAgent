@@ -48,3 +48,14 @@ def create_access_token(customer_id: str) -> str:
         "exp": now+ACCESS_TOKEN_MINUTES*60,             # expires at
     }
     return jwt.encode(payload,private_key(),algorithm=JWT_ALGORITHM)
+
+
+def decode_access_token(token:str) -> str:
+    """Check the token's signature and expiry, and return the customer ID inside it"""
+    payload = jwt.decode(
+        token,
+        public_key(),
+        algorithms=[JWT_ALGORITHM],
+        options={"require": ["sub","exp"]}
+    )
+    return payload["sub"]
